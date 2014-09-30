@@ -1,6 +1,3 @@
-//
-// tuple_twiddle_cpp.cpp - Demonstrate nifpp tuple manipulation
-//
 #include "nifpp.h"
 #include <functional>
 
