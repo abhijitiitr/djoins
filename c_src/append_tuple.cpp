@@ -4,7 +4,80 @@
 using std::make_tuple;
 using std::ref;
 
-extern "C" {
+class ResultSet
+{
+    std::vector<std::vector<std::vector<nifpp::TERM>>> array_of_result_sets;
+    std::unordered_map<int,std::vector<int>> current_result_index;
+    int count;
+public:
+    ResultSet()
+    {
+       count = 0;
+       array_of_result_sets = {};
+       current_result_index = {}; 
+    }
+
+    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<std::vector<nifpp::TERM>> result_set)
+    {
+        array_of_result_sets.push_back(result_set);
+        restructure_current_result_index();
+        count = count - 1;
+        std::vector<std::vector<nifpp::TERM>> final_result = {};
+        if(count==0)
+        {
+            final_result = get_final_result_set();
+        }
+        return final_result;
+    }
+
+    void set_count(int count)
+    {
+        count = count;
+    }
+
+    void restructure_current_result_index()
+    {
+        printf("%d\n", 1);
+    }
+
+    std::vector<std::vector<nifpp::TERM>> get_final_result_set()
+    {
+        std::vector<std::vector<nifpp::TERM>> final_result = {};
+        int index = 0; int inner_index = 0;
+        for (auto it = current_result_index.begin(); it != current_result_index.end(); ++it)
+        {
+            inner_index = 0;
+            std::vector<nifpp::TERM> appended_rows = {};
+            for (auto it_inner = it->second.begin(); it_inner != it->second.end() ; ++it_inner)
+            {
+                std::vector<nifpp::TERM> array_of_binaries = array_of_result_sets.at(index).at(*it_inner);
+                if (inner_index==0)
+                {
+                    appended_rows.insert(appended_rows.end(),array_of_binaries.begin(),array_of_binaries.end());
+                }
+                else
+                {
+                    appended_rows.insert(appended_rows.end(),array_of_binaries.begin()+1,array_of_binaries.end());
+                }
+                inner_index = inner_index + 1;
+            }
+            final_result.push_back(appended_rows);
+            index = index + 1;
+        }
+
+        return final_result;
+    }
+
+    ~ResultSet();
+
+    /* data */
+};
+static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info)
+{
+    nifpp::register_resource<std::vector<std::vector<std::vector<nifpp::TERM>>>>(env, nullptr, "array_of_result_sets");
+    return 0;
+}
+
 static ERL_NIF_TERM append_tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
     try
@@ -16,6 +89,8 @@ static ERL_NIF_TERM append_tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
   	 	ErlNifBinary ebin, bin_term;
   	 	const ERL_NIF_TERM* tuple;
   	 	int arity;
+        std::vector<std::vector<nifpp::TERM>> array_of_rows;
+        nifpp::get_throws(env, argv[3],array_of_rows);
 		// nifpp::get_throws(env, argv[0], ebin); // Assigns ebin to the input binary
 		// enif_alloc_binary(ebin.size, &bin_term); // Size of new binary
 		// memcpy(bin_term.data, ebin.data, ebin.size); // Copying the contents of binary
@@ -39,9 +114,21 @@ static ERL_NIF_TERM append_tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM ar
 // {
 
 // }
+extern "C" {
 
-static ErlNifFunc nif_funcs[] = { {"append_tuple", 2, append_tuple} };
+static ErlNifFunc nif_funcs[] = { {"append_tuple", 2, append_tuple}};
 
 ERL_NIF_INIT(append_tuple, nif_funcs, NULL, NULL, NULL, NULL)
 
 } //extern C
+
+
+
+// int arity;
+// nifpp::TERM *array;
+// vector<int> data;
+
+// enif_get_tuple(env, term, &arity, &array);
+// data.resize(arity);
+// std::transform(array, array+arity, data.begin(), [&](nifpp::TERM t)
+//     {return nifpp::get<int>(env, t);});
