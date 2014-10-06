@@ -9,18 +9,22 @@ class ResultSet
     std::vector<std::vector<std::vector<nifpp::TERM>>> array_of_result_sets;
     std::unordered_map<int,std::vector<int>> current_result_index;
     int count;
+    ErlNifEnv* env;
+    bool is_first_iteration;
 public:
     ResultSet()
     {
        count = 0;
        array_of_result_sets = {};
-       current_result_index = {}; 
+       current_result_index = {};
+       env = NULL; 
+       is_first_iteration = true;
     }
 
-    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<std::vector<nifpp::TERM>> result_set)
+    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<std::vector<nifpp::TERM>> result_set,ErlNifEnv* env_outer)
     {
         array_of_result_sets.push_back(result_set);
-        restructure_current_result_index();
+        restructure_current_result_index(env_outer);
         count = count - 1;
         std::vector<std::vector<nifpp::TERM>> final_result = {};
         if(count==0)
@@ -35,9 +39,35 @@ public:
         count = count;
     }
 
-    void restructure_current_result_index()
+    void restructure_current_result_index(ErlNifEnv* env_outer)
     {
-        printf("%d\n", 1);
+        std::unordered_map<int,std::vector<int>> new_result_index;
+        std::vector<std::vector<nifpp::TERM>> last_result_set = array_of_result_sets.back();
+        int index = 0;
+        for (auto it = last_result_set.begin(); it != last_result_set.end();++it)
+        {
+            ErlNifBinary binary, bin_term;
+            nifpp::get_throws(env, (*it).at(0), binary);
+            enif_alloc_binary(binary.size, &bin_term);
+            memcpy(bin_term.data, binary.data, binary.size);
+            if(is_first_iteration==true)
+            {
+                std::vector<int> int_list;
+                int_list.push_back(index);
+                new_result_index.emplace (bin_term.data[0], int_list);
+            }
+            else
+            {
+                auto it = current_result_index.find(bin_term.data[0]);
+                if(it != current_result_index.end()) 
+                {
+                    current_result_index.at(bin_term.data[0]).push_back(index);
+                    new_result_index.emplace (bin_term.data[0], current_result_index.at(bin_term.data[0]));
+                }
+            }
+            current_result_index = new_result_index;
+            index = index + 1;
+        }
     }
 
     std::vector<std::vector<nifpp::TERM>> get_final_result_set()
@@ -48,7 +78,8 @@ public:
         {
             inner_index = 0;
             std::vector<nifpp::TERM> appended_rows = {};
-            for (auto it_inner = it->second.begin(); it_inner != it->second.end() ; ++it_inner)
+            std::vector<int> array_of_indices = it->second;
+            for (auto it_inner = array_of_indices.begin(); it_inner != array_of_indices.end() ; ++it_inner)
             {
                 std::vector<nifpp::TERM> array_of_binaries = array_of_result_sets.at(index).at(*it_inner);
                 if (inner_index==0)
