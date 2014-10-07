@@ -1,27 +1,26 @@
 #include "nifpp.h"
 #include <functional>
 
-using std::make_tuple;
-using std::ref;
-
 class ResultSet
 {
-    std::vector<std::vector<std::vector<nifpp::TERM>>> array_of_result_sets;
+    std::vector<std::vector<nifpp::TERM>> array_of_result_sets;
     std::unordered_map<int,std::vector<int>> current_result_index;
     int count;
+    int initial_count;
     ErlNifEnv* env;
     bool is_first_iteration;
 public:
-    ResultSet()
+    ResultSet(int init_count)
     {
-       count = 0;
+       count = init_count;
+       initial_count = init_count;
        array_of_result_sets = {};
        current_result_index = {};
        env = NULL; 
        is_first_iteration = true;
     }
 
-    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<std::vector<nifpp::TERM>> result_set,ErlNifEnv* env_outer)
+    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<nifpp::TERM> result_set,ErlNifEnv* env_outer)
     {
         array_of_result_sets.push_back(result_set);
         restructure_current_result_index(env_outer);
@@ -29,28 +28,37 @@ public:
         std::vector<std::vector<nifpp::TERM>> final_result = {};
         if(count==0)
         {
-            final_result = get_final_result_set();
+            final_result = get_final_result_set(env_outer);
         }
         return final_result;
     }
 
-    void set_count(int count)
+    int get_count()
     {
-        count = count;
+        return count;
+    }
+
+    std::unordered_map<int,std::vector<int>> get_current_result_index()
+    {
+        return current_result_index;
     }
 
     void restructure_current_result_index(ErlNifEnv* env_outer)
     {
         std::unordered_map<int,std::vector<int>> new_result_index;
-        std::vector<std::vector<nifpp::TERM>> last_result_set = array_of_result_sets.back();
+        std::vector<nifpp::TERM> last_result_set = array_of_result_sets.back();
         int index = 0;
+        ErlNifBinary ebin, bin_term;
+        int arity;
+        const ERL_NIF_TERM* tuple;
         for (auto it = last_result_set.begin(); it != last_result_set.end();++it)
         {
-            ErlNifBinary binary, bin_term;
-            nifpp::get_throws(env, (*it).at(0), binary);
-            enif_alloc_binary(binary.size, &bin_term);
-            memcpy(bin_term.data, binary.data, binary.size);
-            if(is_first_iteration==true)
+            enif_get_tuple(env_outer, *it, &arity, &tuple);
+            nifpp::get_throws(env_outer, tuple[0], ebin);
+            enif_alloc_binary(ebin.size, &bin_term);
+            memcpy(bin_term.data, ebin.data, ebin.size);
+            bin_term.data[0] = (int)(bin_term.data[0]);
+            if(count==initial_count)
             {
                 std::vector<int> int_list;
                 int_list.push_back(index);
@@ -70,10 +78,14 @@ public:
         }
     }
 
-    std::vector<std::vector<nifpp::TERM>> get_final_result_set()
+    std::vector<std::vector<nifpp::TERM>> get_final_result_set(ErlNifEnv* env)
     {
         std::vector<std::vector<nifpp::TERM>> final_result = {};
         int index = 0; int inner_index = 0;
+        int arity; int comp_arity = 0;
+        const ERL_NIF_TERM* tuple;
+        ErlNifBinary ebin, bin_term;
+        nifpp::TERM term;
         for (auto it = current_result_index.begin(); it != current_result_index.end(); ++it)
         {
             inner_index = 0;
@@ -81,13 +93,34 @@ public:
             std::vector<int> array_of_indices = it->second;
             for (auto it_inner = array_of_indices.begin(); it_inner != array_of_indices.end() ; ++it_inner)
             {
-                std::vector<nifpp::TERM> array_of_binaries = array_of_result_sets.at(index).at(*it_inner);
+                std::vector<nifpp::TERM> array_of_binaries = {};
+                enif_get_tuple(env, array_of_result_sets.at(index).at(*it_inner), &arity, &tuple);
                 if (inner_index==0)
                 {
+                    while(comp_arity != arity)
+                    {
+                        nifpp::get_throws(env, tuple[comp_arity], ebin);
+                        enif_alloc_binary(ebin.size, &bin_term);
+                        memcpy(bin_term.data, ebin.data, ebin.size);
+                        term = nifpp::make(env, bin_term);
+                        array_of_binaries.push_back(term);
+                        comp_arity = comp_arity + 1;
+                    }
+                    
                     appended_rows.insert(appended_rows.end(),array_of_binaries.begin(),array_of_binaries.end());
                 }
                 else
-                {
+                {   
+                    comp_arity = comp_arity + 1;
+                    while(comp_arity != arity)
+                    {
+                        nifpp::get_throws(env, tuple[comp_arity], ebin);
+                        enif_alloc_binary(ebin.size, &bin_term);
+                        memcpy(bin_term.data, ebin.data, ebin.size);
+                        term = nifpp::make(env, bin_term);
+                        array_of_binaries.push_back(term);
+                        comp_arity = comp_arity + 1;
+                    }
                     appended_rows.insert(appended_rows.end(),array_of_binaries.begin()+1,array_of_binaries.end());
                 }
                 inner_index = inner_index + 1;
@@ -99,57 +132,104 @@ public:
         return final_result;
     }
 
-    ~ResultSet();
+    // ~ResultSet();
 
     /* data */
 };
 static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info)
 {
-    nifpp::register_resource<std::vector<std::vector<std::vector<nifpp::TERM>>>>(env, nullptr, "array_of_result_sets");
+    nifpp::register_resource<ResultSet>(env, nullptr, "ResultSet");
     return 0;
 }
 
-static ERL_NIF_TERM append_tuple(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+static ERL_NIF_TERM initialize_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
 {
-    try
-    {   std::vector<nifpp::TERM> v;
-    	std::vector<nifpp::TERM> mylist1, mylist2;
-    	std::vector<nifpp::TERM> output = {};
-    	nifpp::get_throws(env, argv[0], mylist1);
-    	nifpp::get_throws(env, argv[1], mylist2);
-  	 	ErlNifBinary ebin, bin_term;
-  	 	const ERL_NIF_TERM* tuple;
-  	 	int arity;
-        std::vector<std::vector<nifpp::TERM>> array_of_rows;
-        nifpp::get_throws(env, argv[3],array_of_rows);
-		// nifpp::get_throws(env, argv[0], ebin); // Assigns ebin to the input binary
-		// enif_alloc_binary(ebin.size, &bin_term); // Size of new binary
-		// memcpy(bin_term.data, ebin.data, ebin.size); // Copying the contents of binary
-		for (std::vector<nifpp::TERM>::iterator it = mylist1.begin() ; it != mylist1.end(); ++it)
-    	{
-    		enif_get_tuple(env, *it, &arity, &tuple);
-    		nifpp::get_throws(env, tuple[0], ebin);
-    		enif_alloc_binary(ebin.size, &bin_term);
-    		memcpy(bin_term.data, ebin.data, ebin.size);
-    		output.emplace (output.end(), enif_make_binary(env, &bin_term));
-    	}
-		mylist1.insert(mylist1.end(),mylist2.begin()+1, mylist2.end());
-		return nifpp::make(env,output);
+    try{
+  //   {   std::vector<nifpp::TERM> v;
+  //    std::vector<nifpp::TERM> mylist1, mylist2;
+  //    std::vector<nifpp::TERM> output = {};
+  //    nifpp::get_throws(env, argv[0], mylist1);
+  //    nifpp::get_throws(env, argv[1], mylist2);
+  //        ErlNifBinary ebin, bin_term;
+  //        const ERL_NIF_TERM* tuple;
+  //        int arity;
+  //       std::vector<std::vector<nifpp::TERM>> array_of_rows;
+  //       nifpp::get_throws(env, argv[3],array_of_rows);
+        // for (std::vector<nifpp::TERM>::iterator it = mylist1.begin() ; it != mylist1.end(); ++it)
+  //    {
+  //        enif_get_tuple(env, *it, &arity, &tuple);
+  //        nifpp::get_throws(env, tuple[0], ebin);
+  //        enif_alloc_binary(ebin.size, &bin_term);
+  //        memcpy(bin_term.data, ebin.data, ebin.size);
+  //        output.emplace (output.end(), enif_make_binary(env, &bin_term));
+  //    }
+        // mylist1.insert(mylist1.end(),mylist2.begin()+1, mylist2.end());
+        // return nifpp::make(env,output);
+        int count;
+        nifpp::get(env, argv[0], count);
+        ERL_NIF_TERM result;
+        auto map_ptr = nifpp::construct_resource<ResultSet>(count);
+        result = nifpp::make(env, map_ptr);
+        return result;
     }
     catch(nifpp::badarg) {}
     catch(...) {}
     return enif_make_badarg(env);
 }
 
+static ERL_NIF_TERM append_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    try
+    {
+        ERL_NIF_TERM result;
+        nifpp::resource_ptr<ResultSet> ptr;
+        std::vector<std::vector<nifpp::TERM>> result_set;
+        std::vector<nifpp::TERM> input_result_set;
+        printf("%d\n", nifpp::get(env, argv[0], ptr));
+        nifpp::get(env, argv[1], input_result_set);
+        result_set = (*ptr).append_result_set(input_result_set, env);
+        if(result_set.size() == 0)
+        {
+            printf("%d\n", 10000);
+            result = nifpp::make(env, (*ptr).get_current_result_index());
+        }
+        else
+        {
+            printf("%d\n", 100);
+            result = nifpp::make(env, (*ptr).get_current_result_index());
+        }
+        return result;
+    }
+    catch(...) {}
+    return enif_make_badarg(env);
+}
+
+static ERL_NIF_TERM return_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    try
+    {
+        nifpp::resource_ptr<ResultSet> ptr;
+        nifpp::TERM term;
+        printf("%d\n", nifpp::get(env, argv[0], ptr));
+        // enif_release_resource(&ptr);
+        return nifpp::make(env, 1);
+    }
+    catch(...) {}
+    return enif_make_badarg(env);
+}
 // static ERL_NIF_TERM return_binary_copy()
 // {
 
 // }
 extern "C" {
 
-static ErlNifFunc nif_funcs[] = { {"append_tuple", 2, append_tuple}};
+static ErlNifFunc nif_funcs[] = {
+                                    {"initialize_result_set", 1, initialize_result_set}, 
+                                    {"return_result_set", 1, return_result_set},
+                                    {"append_result_set", 2, append_result_set},
+                                };
 
-ERL_NIF_INIT(append_tuple, nif_funcs, NULL, NULL, NULL, NULL)
+ERL_NIF_INIT(append_tuple, nif_funcs, load, NULL, NULL, NULL)
 
 } //extern C
 
