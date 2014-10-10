@@ -20,7 +20,10 @@ public:
        env = NULL; 
        is_first_iteration = true;
     }
-
+    int get_initial_count()
+    {
+        return initial_count;
+    }
     std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<nifpp::TERM> result_set,ErlNifEnv* env_outer)
     {
         array_of_result_sets.push_back(result_set);
@@ -41,7 +44,15 @@ public:
         }
 
     }
-
+    void nullify_self()
+    {
+        count = NULL;
+        initial_count = NULL;
+        array_of_result_sets = {};
+        current_result_index = {};
+        env = NULL;
+        is_first_iteration = false;
+    }
     int get_count()
     {
         return count;
@@ -195,12 +206,35 @@ static ERL_NIF_TERM return_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TE
     try
     {
         nifpp::resource_ptr<ResultSet> ptr;
-        nifpp::TERM term;
-        nifpp::get(env, argv[0], ptr);
+        if(nifpp::get(env, argv[0], ptr)==1)
+        {
+            printf("%d\n", (*ptr).get_initial_count());
+            (*ptr) = NULL;
+        }
+        else
+        {
+            return enif_make_badarg(env);
+        }
         // enif_release_resource(&ptr);
         return nifpp::make(env, 1);
     }
     catch(...) {}
+    return enif_make_badarg(env);
+}
+
+static ERL_NIF_TERM nullify_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TERM argv[])
+{
+    try
+    {
+        ERL_NIF_TERM result;
+        nifpp::resource_ptr<ResultSet> ptr;
+        std::vector<std::vector<nifpp::TERM>> result_set;
+        std::vector<nifpp::TERM> input_result_set;
+        nifpp::get(env, argv[0], ptr);
+        // enif_release_resource(&ptr);
+        return nifpp::make(env, 1);
+    }
+    catch(...){}
     return enif_make_badarg(env);
 }
 // static ERL_NIF_TERM return_binary_copy()
