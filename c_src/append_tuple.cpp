@@ -1,6 +1,5 @@
-#include "nifpp.h"
-#include <functional>
 
+#include "nifpp.h"
 
 class ResultSet
 {
