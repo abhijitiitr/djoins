@@ -11,7 +11,7 @@
 % append_tuple:return_result_set(Ref).
 
 -module(par_append_tuple).
--export([initialize_result_set/1,return_result_set/1,append_result_set/2]).
+-export([initialize_result_set/1,return_result_set/1,append_result_set/3]).
 -on_load(init/0).
 
 init() ->
@@ -23,6 +23,6 @@ initialize_result_set(_T) ->
 return_result_set(_T) ->
     exit(nif_library_not_loaded).
 
-append_result_set(_R,_E) ->
+append_result_set(_R,_E,_U) ->
 	exit(nif_library_not_loaded).
 
