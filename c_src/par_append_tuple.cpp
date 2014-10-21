@@ -18,23 +18,43 @@ public:
        map_of_result_sets = {};
        current_result_index = {};
        std::vector<int> empty_vector = {};
-       for (int i = 0; i < init_count; ++i)
+       for (int i = 1; i <= init_count; ++i)
        {
            reverse_result_index.emplace(i,empty_vector);
        }
        env = NULL; 
     }
+    int get_result_count()
+    {
+        return result_count;
+    }
+    int get_total_count()
+    {
+        return total_count;
+    }
+    std::unordered_map<int,std::vector<nifpp::TERM>> get_map_of_results_sets()
+    {
+        return map_of_result_sets;
+    }
     std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<nifpp::TERM> result_set,int uid, ErlNifEnv* env_outer)
     {
-        map_of_result_sets.emplace(uid, result_set);
-        restructure_current_result_index(env_outer, &result_set, uid);
-        result_count++ ;
-        std::vector<std::vector<nifpp::TERM>> final_result = {};
-        if(result_count==total_count)
+        if(result_count < total_count)
         {
-            final_result = get_final_result_set(env_outer);
+            map_of_result_sets.emplace(uid, result_set);
+            restructure_current_result_index(env_outer, uid);
+            result_count++ ;
+            std::vector<std::vector<nifpp::TERM>> final_result = {};
+            if(result_count==total_count)
+            {
+                final_result = get_final_result_set(env_outer);
+            }
+            return final_result;
         }
-        return final_result;
+        else
+        {
+            std::vector<std::vector<nifpp::TERM>> final_result = {};
+            return final_result;
+        }   
     }
     void print_current_result_set()
     {
@@ -44,16 +64,20 @@ public:
         }
 
     }
-    void restructure_current_result_index(ErlNifEnv* env_outer, std::vector<nifpp::TERM>* result_set, int uid)
+    void restructure_current_result_index(ErlNifEnv* env_outer, int uid)
     {
         int index = 0;
         ErlNifBinary ebin, bin_term;
+        
+        std::vector<nifpp::TERM> result_set = map_of_result_sets.at(uid);
+        
         int arity;
         int hash_val;
         const ERL_NIF_TERM* tuple;
-        for (auto it = (*result_set).begin(); it != (*result_set).end(); ++it)
+        int size = result_set.size();
+        for (int i = 0; i < size; ++i)
         {
-            if(enif_get_tuple(env_outer, *it, &arity, &tuple)!=1)
+            if(enif_get_tuple(env_outer, result_set.at(i), &arity, &tuple)!=1)
                 enif_make_badarg(env_outer);
             nifpp::get_throws(env_outer, tuple[0], ebin);
             enif_alloc_binary(ebin.size, &bin_term);
@@ -165,8 +189,13 @@ static ERL_NIF_TERM append_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TE
         nifpp::get(env, argv[1], input_result_set);
         nifpp::get(env, argv[2], uid);
         result_set = (*ptr).append_result_set(input_result_set, uid, env);
-        result = nifpp::make(env, result_set);
-        return result;
+        if ((*ptr).get_total_count()==(*ptr).get_result_count())
+        {
+            return nifpp::make(env, result_set);
+        }
+        auto new_result = (*ptr).get_map_of_results_sets();
+        return nifpp::make(env, new_result);
+        // return result;
     }
     catch(...) {}
     return enif_make_badarg(env);
@@ -179,14 +208,12 @@ static ERL_NIF_TERM return_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TE
         nifpp::resource_ptr<ResultSet> ptr;
         if(nifpp::get(env, argv[0], ptr)==1)
         {
-            // printf("%d\n", (*ptr).get_initial_count());
             (*ptr) = NULL;
         }
         else
         {
             return enif_make_badarg(env);
         }
-        // enif_release_resource(&ptr);
         return nifpp::make(env, 1);
     }
     catch(...) {}
@@ -215,7 +242,7 @@ extern "C" {
 static ErlNifFunc nif_funcs[] = {
                                     {"initialize_result_set", 1, initialize_result_set}, 
                                     {"return_result_set", 1, return_result_set},
-                                    {"append_result_set", 2, append_result_set},
+                                    {"append_result_set", 3, append_result_set},
                                 };
 
 ERL_NIF_INIT(par_append_tuple, nif_funcs, load, NULL, NULL, NULL)
