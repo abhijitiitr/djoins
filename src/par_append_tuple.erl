@@ -18,7 +18,7 @@
 % Pid ! {self(), {data, Ref, R2, 2}}.  
 
 -module(par_append_tuple).
--export([initialize_result_set/1,return_result_set/1,append_result_set/3,spawn_concurrent_append/0,spawn_core/0]).
+-export([initialize_result_set/1,return_result_set/1,append_result_set/3,spawn_concurrent_append/1,spawn_core/0]).
 -on_load(init/0).
 
 init() ->
@@ -33,20 +33,34 @@ return_result_set(_T) ->
 append_result_set(_R,_E,_U) ->
 	exit(nif_library_not_loaded).
 
-spawn_concurrent_append() ->
+spawn_concurrent_append(List) ->
 	receive
 		{From, {data, Ref, Rows, Uid}} ->
 			Pid = spawn(?MODULE, spawn_core, []),
 			Pid ! {self(), {data_core, Ref, Rows, Uid, From}},
-			spawn_concurrent_append()
+			NewList = [Pid | [List]],
+			spawn_concurrent_append(NewList);
+		{result, ok} -> 
+			lists:foreach(fun(Pid) ->
+				Pid ! {self(), {completed, ok}}
+              end, List)
+
 	end.
 
 spawn_core() ->
 	receive
 		{From, {data_core, Ref, Rows, Uid, OrigPid}} -> 
 			Result = append_result_set(Ref, Rows, Uid),
-			OrigPid ! {self(), {result, Result}},
-			spawn_core()
+			case Result of
+				{result, ResultBody}  ->
+					OrigPid ! {self(), {result, ResultBody}},
+					From ! {result, ok};
+				_ -> 
+				    ok
+			end,
+			spawn_core();
+		{completed, ok} ->
+			ok
 	end.
 
 

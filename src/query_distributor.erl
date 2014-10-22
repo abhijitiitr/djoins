@@ -1,3 +1,4 @@
+% c(par_append_tuple).
 %%Pid=spawn(query_distributor,spawn_concurrent_append,[{ok,[]}]).
 %% Pid ! {self(), {data,<<"1">>}}.
 -module(query_distributor).

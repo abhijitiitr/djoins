@@ -77,12 +77,11 @@ public:
             if(enif_get_tuple(env_outer, result_set.at(i), &arity, &tuple)!=1)
                 enif_make_badarg(env_outer);
             nifpp::get_throws(env_outer, tuple[0], ebin);
-            enif_alloc_binary(ebin.size, &bin_term);
-            memcpy(bin_term.data, ebin.data, ebin.size);
             hash_val = 0 ;
-            for(int i=0; i<bin_term.size; ++i){
-               hash_val = (10*hash_val) + bin_term.data[i];
+            for(int i=0; i<ebin.size; ++i){
+               hash_val = (10*hash_val) + ebin.data[i];
             }
+            enif_release_binary(&ebin);
             std::pair<int, int> index_addr = std::make_pair(uid, index);
             std::vector<std::pair<int,int>> init_vector = {};
             init_vector.push_back(index_addr);
@@ -116,7 +115,6 @@ public:
                 ErlNifEnv* env_inner = env_map.at(curr_pair.first);
                 if(enif_get_tuple(env_inner, map_of_result_sets.at(curr_pair.first).at(curr_pair.second), &arity, &tuple)!=1)
                     enif_make_badarg(env);
-                nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
                
                 if (inner_index==0)
                 {
@@ -128,6 +126,8 @@ public:
                         term = nifpp::make(env, bin_term);
                         array_of_binaries.push_back(term);
                         comp_arity = comp_arity + 1;
+                        enif_release_binary(&bin_term);
+                        enif_release_binary(&ebin);
                     }
 
                 }
@@ -142,6 +142,8 @@ public:
                         term = nifpp::make(env, bin_term);
                         array_of_binaries.push_back(term);
                         comp_arity = comp_arity + 1;
+                        enif_release_binary(&bin_term);
+                        enif_release_binary(&ebin);
                     }
 
                 }
@@ -152,8 +154,6 @@ public:
         }
         return final_result;
     }
-
-    // ~ResultSet();
 
 };
 static int load(ErlNifEnv* env, void** priv, ERL_NIF_TERM load_info)
