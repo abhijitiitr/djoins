@@ -7,6 +7,7 @@ class ResultSet
     std::unordered_map<int,std::vector<nifpp::TERM>> map_of_result_sets;
     std::unordered_map<int,std::vector<std::pair<int,int>>> current_result_index;
     std::unordered_map<int,std::vector<int>> reverse_result_index;
+    std::unordered_map<int,ErlNifEnv*> env_map;
     int result_count;
     int total_count;
     ErlNifEnv* env;
@@ -19,9 +20,7 @@ public:
        current_result_index = {};
        std::vector<int> empty_vector = {};
        for (int i = 1; i <= init_count; ++i)
-       {
            reverse_result_index.emplace(i,empty_vector);
-       }
        env = NULL; 
     }
     int get_result_count()
@@ -38,30 +37,24 @@ public:
     }
     std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<nifpp::TERM> result_set,int uid, ErlNifEnv* env_outer)
     {
+        std::vector<std::vector<nifpp::TERM>> final_result_set = {};
         if(result_count < total_count)
         {
             map_of_result_sets.emplace(uid, result_set);
+            env_map.emplace(uid, env_outer);
             restructure_current_result_index(env_outer, uid);
             result_count++ ;
-            std::vector<std::vector<nifpp::TERM>> final_result = {};
-            if(result_count==total_count)
+            if (result_count==total_count)
             {
-                final_result = get_final_result_set(env_outer);
+                final_result_set = get_final_result_set(env_outer);
             }
-            return final_result;
         }
-        else
-        {
-            std::vector<std::vector<nifpp::TERM>> final_result = {};
-            return final_result;
-        }   
+        return final_result_set;
     }
     void print_current_result_set()
     {
         for (auto it = current_result_index.begin(); it != current_result_index.end(); ++it)
-        {
             printf("%d\n", it->first);
-        }
 
     }
     void restructure_current_result_index(ErlNifEnv* env_outer, int uid)
@@ -103,8 +96,10 @@ public:
         std::vector<std::vector<nifpp::TERM>> final_result = {};
         int inner_index = 0;
         int arity; int comp_arity = 0;
-        const ERL_NIF_TERM* tuple;
+        const ERL_NIF_TERM* tuple1;
+        const ERL_NIF_TERM* tuple2;
         ErlNifBinary ebin, bin_term;
+
         nifpp::TERM term;
         for (auto it_outer = reverse_result_index.at(total_count).begin(); it_outer != reverse_result_index.at(total_count).end(); ++it_outer)
         {
@@ -115,36 +110,51 @@ public:
                 comp_arity = 0;
                 std::vector<nifpp::TERM> array_of_binaries = {};
                 std::pair<int,int> curr_pair = (*it_inner);
-                if(enif_get_tuple(env, map_of_result_sets.at(curr_pair.first).at(curr_pair.second), &arity, &tuple)!=1)
-                    enif_make_badarg(env);
-                
-                if (inner_index==0)
+                ErlNifEnv* env_inner = env_map.at(curr_pair.first);
+                if (result_count==2)
                 {
-                    while(comp_arity != arity)
-                    {
-                        nifpp::get_throws(env, tuple[comp_arity], ebin);
-                        enif_alloc_binary(ebin.size, &bin_term);
-                        memcpy(bin_term.data, ebin.data, ebin.size);
-                        term = nifpp::make(env, bin_term);
-                        array_of_binaries.push_back(term);
-                        comp_arity = comp_arity + 1;
-                    }
+                     if(enif_get_tuple(env_inner, map_of_result_sets.at(curr_pair.first).at(curr_pair.second), &arity, &tuple2)!=1)
+                        enif_make_badarg(env);
+                        printf("%d%d%d%d\n", curr_pair.first, curr_pair.second, arity, comp_arity);
+                        nifpp::get_throws(env_inner, tuple2[comp_arity], ebin);
                 }
                 else
                 {
-                    comp_arity =  1;
-                    while(comp_arity != arity)
-                    {
-                        nifpp::get_throws(env, tuple[comp_arity], ebin);
-                        enif_alloc_binary(ebin.size, &bin_term);
-                        memcpy(bin_term.data, ebin.data, ebin.size);
-                        term = nifpp::make(env, bin_term);
-                        array_of_binaries.push_back(term);
-                        comp_arity = comp_arity + 1;
-                    }
+                    if(enif_get_tuple(env_inner, map_of_result_sets.at(curr_pair.first).at(curr_pair.second), &arity, &tuple1)!=1)
+                        enif_make_badarg(env);
+                        nifpp::get_throws(env_inner, tuple1[comp_arity], ebin);
                 }
-                appended_rows.insert(appended_rows.end(),array_of_binaries.begin(),array_of_binaries.end());
+               
+                // if (inner_index==0)
+                // {
+                //     while(comp_arity != arity && comp_arity < arity)
+                //     {
+                //         printf("%s\n", "a");
+                //         nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
+                //         printf("%s\n", "b");
+                //         enif_alloc_binary(ebin.size, &bin_term);
+                //         memcpy(bin_term.data, ebin.data, ebin.size);
+                //         term = nifpp::make(env, bin_term);
+                //         array_of_binaries.push_back(term);
+                //         comp_arity = comp_arity + 1;
+                //     }
 
+                // }
+                // else
+                // {
+                //     comp_arity =  1;
+                //     while(comp_arity != arity && comp_arity < arity)
+                //     {
+                //         nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
+                //         enif_alloc_binary(ebin.size, &bin_term);
+                //         memcpy(bin_term.data, ebin.data, ebin.size);
+                //         term = nifpp::make(env, bin_term);
+                //         array_of_binaries.push_back(term);
+                //         comp_arity = comp_arity + 1;
+                //     }
+
+                // }
+                appended_rows.insert(appended_rows.end(),array_of_binaries.begin(),array_of_binaries.end());
                 inner_index = inner_index + 1;
             }
             final_result.push_back(appended_rows);
@@ -188,12 +198,7 @@ static ERL_NIF_TERM append_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TE
         nifpp::get(env, argv[0], ptr);
         nifpp::get(env, argv[1], input_result_set);
         nifpp::get(env, argv[2], uid);
-        result_set = (*ptr).append_result_set(input_result_set, uid, env);
-        if ((*ptr).get_total_count()==(*ptr).get_result_count())
-        {
-            return nifpp::make(env, result_set);
-        }
-        auto new_result = (*ptr).get_map_of_results_sets();
+        std::vector<std::vector<nifpp::TERM>> new_result = (*ptr).append_result_set(input_result_set, uid, env);
         return nifpp::make(env, new_result);
         // return result;
     }
@@ -208,13 +213,11 @@ static ERL_NIF_TERM return_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TE
         nifpp::resource_ptr<ResultSet> ptr;
         if(nifpp::get(env, argv[0], ptr)==1)
         {
-            (*ptr) = NULL;
+            std::vector<std::vector<nifpp::TERM>> new_result = (*ptr).get_final_result_set(env);
+            return nifpp::make(env, new_result);
         }
         else
-        {
             return enif_make_badarg(env);
-        }
-        return nifpp::make(env, 1);
     }
     catch(...) {}
     return enif_make_badarg(env);
@@ -230,8 +233,7 @@ static ERL_NIF_TERM nullify_result_set(ErlNifEnv* env, int argc, const ERL_NIF_T
         std::vector<nifpp::TERM> input_result_set;
         nifpp::get(env, argv[0], ptr);
         // (*ptr) = NULL;
-        // free(ptr);
-        return nifpp::make(env, 1);
+
     }
     catch(...){}
     return enif_make_badarg(env);
