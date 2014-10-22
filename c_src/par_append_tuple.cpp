@@ -96,8 +96,7 @@ public:
         std::vector<std::vector<nifpp::TERM>> final_result = {};
         int inner_index = 0;
         int arity; int comp_arity = 0;
-        const ERL_NIF_TERM* tuple1;
-        const ERL_NIF_TERM* tuple2;
+        const ERL_NIF_TERM* tuple;
         ErlNifBinary ebin, bin_term;
 
         nifpp::TERM term;
@@ -111,49 +110,37 @@ public:
                 std::vector<nifpp::TERM> array_of_binaries = {};
                 std::pair<int,int> curr_pair = (*it_inner);
                 ErlNifEnv* env_inner = env_map.at(curr_pair.first);
-                if (result_count==2)
+                if(enif_get_tuple(env_inner, map_of_result_sets.at(curr_pair.first).at(curr_pair.second), &arity, &tuple)!=1)
+                    enif_make_badarg(env);
+                nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
+               
+                if (inner_index==0)
                 {
-                     if(enif_get_tuple(env_inner, map_of_result_sets.at(curr_pair.first).at(curr_pair.second), &arity, &tuple2)!=1)
-                        enif_make_badarg(env);
-                        printf("%d%d%d%d\n", curr_pair.first, curr_pair.second, arity, comp_arity);
-                        nifpp::get_throws(env_inner, tuple2[comp_arity], ebin);
+                    while(comp_arity != arity && comp_arity < arity)
+                    {
+                        nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
+                        enif_alloc_binary(ebin.size, &bin_term);
+                        memcpy(bin_term.data, ebin.data, ebin.size);
+                        term = nifpp::make(env, bin_term);
+                        array_of_binaries.push_back(term);
+                        comp_arity = comp_arity + 1;
+                    }
+
                 }
                 else
                 {
-                    if(enif_get_tuple(env_inner, map_of_result_sets.at(curr_pair.first).at(curr_pair.second), &arity, &tuple1)!=1)
-                        enif_make_badarg(env);
-                        nifpp::get_throws(env_inner, tuple1[comp_arity], ebin);
+                    comp_arity =  1;
+                    while(comp_arity != arity && comp_arity < arity)
+                    {
+                        nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
+                        enif_alloc_binary(ebin.size, &bin_term);
+                        memcpy(bin_term.data, ebin.data, ebin.size);
+                        term = nifpp::make(env, bin_term);
+                        array_of_binaries.push_back(term);
+                        comp_arity = comp_arity + 1;
+                    }
+
                 }
-               
-                // if (inner_index==0)
-                // {
-                //     while(comp_arity != arity && comp_arity < arity)
-                //     {
-                //         printf("%s\n", "a");
-                //         nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
-                //         printf("%s\n", "b");
-                //         enif_alloc_binary(ebin.size, &bin_term);
-                //         memcpy(bin_term.data, ebin.data, ebin.size);
-                //         term = nifpp::make(env, bin_term);
-                //         array_of_binaries.push_back(term);
-                //         comp_arity = comp_arity + 1;
-                //     }
-
-                // }
-                // else
-                // {
-                //     comp_arity =  1;
-                //     while(comp_arity != arity && comp_arity < arity)
-                //     {
-                //         nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
-                //         enif_alloc_binary(ebin.size, &bin_term);
-                //         memcpy(bin_term.data, ebin.data, ebin.size);
-                //         term = nifpp::make(env, bin_term);
-                //         array_of_binaries.push_back(term);
-                //         comp_arity = comp_arity + 1;
-                //     }
-
-                // }
                 appended_rows.insert(appended_rows.end(),array_of_binaries.begin(),array_of_binaries.end());
                 inner_index = inner_index + 1;
             }
