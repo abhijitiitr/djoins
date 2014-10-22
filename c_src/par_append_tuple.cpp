@@ -23,6 +23,10 @@ public:
            reverse_result_index.emplace(i,empty_vector);
        env = NULL; 
     }
+    bool is_last_result()
+    {
+        return (total_count == result_count);
+    }
     int get_result_count()
     {
         return result_count;
@@ -186,7 +190,16 @@ static ERL_NIF_TERM append_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TE
         nifpp::get(env, argv[1], input_result_set);
         nifpp::get(env, argv[2], uid);
         std::vector<std::vector<nifpp::TERM>> new_result = (*ptr).append_result_set(input_result_set, uid, env);
-        return nifpp::make(env, new_result);
+        if((*ptr).is_last_result())
+        {
+            auto tup = std::make_tuple(nifpp::str_atom("result"), new_result);
+            result = nifpp::make(env, tup);
+        }
+        else
+        {
+            result = nifpp::make(env, new_result);
+        }
+        return result;
         // return result;
     }
     catch(...) {}
