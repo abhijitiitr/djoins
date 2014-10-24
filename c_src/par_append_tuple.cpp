@@ -1,27 +1,31 @@
+///unique_ptr and hash_table
+////std::unique_ptr<X> &cache;
+////std::unique_ptr<X> &cache;
+// std::unique_ptr<X> &entry = cache[key];
+//entry = std::make_unique<X>();
+//
+
 #include "nifpp.h"
 #include <functional>
 #include <utility>  
+#include <unistd.h>
 
 class ResultSet
 {
-    std::unordered_map<int,std::vector<nifpp::TERM>> map_of_result_sets;
+    std::vector<std::vector<nifpp::TERM>> map_of_result_sets;
     std::unordered_map<int,std::vector<std::pair<int,int>>> current_result_index;
-    std::unordered_map<int,std::vector<int>> reverse_result_index;
-    std::unordered_map<int,ErlNifEnv*> env_map;
+    std::vector<std::vector<int>> reverse_result_index;
+    std::vector<ErlNifEnv*> env_map;
     int result_count;
     int total_count;
-    ErlNifEnv* env;
 public:
     ResultSet(int init_count)
     {
        total_count = init_count;
        result_count = 0;
-       map_of_result_sets = {};
-       current_result_index = {};
-       std::vector<int> empty_vector = {};
-       for (int i = 1; i <= init_count; ++i)
-           reverse_result_index.emplace(i,empty_vector);
-       env = NULL; 
+       map_of_result_sets.resize(init_count);
+       env_map.resize(init_count);
+       reverse_result_index.resize(init_count);
     }
     bool is_last_result()
     {
@@ -35,7 +39,7 @@ public:
     {
         return total_count;
     }
-    std::unordered_map<int,std::vector<nifpp::TERM>> get_map_of_results_sets()
+    std::vector<std::vector<nifpp::TERM>> get_map_of_results_sets()
     {
         return map_of_result_sets;
     }
@@ -44,8 +48,8 @@ public:
         std::vector<std::vector<nifpp::TERM>> final_result_set = {};
         if(result_count < total_count)
         {
-            map_of_result_sets.emplace(uid, result_set);
-            env_map.emplace(uid, env_outer);
+            map_of_result_sets[uid-1] = result_set;
+            env_map[uid-1] = env_outer;
             restructure_current_result_index(env_outer, uid);
             result_count++ ;
             if (result_count==total_count)
@@ -66,7 +70,7 @@ public:
         int index = 0;
         ErlNifBinary ebin, bin_term;
         
-        std::vector<nifpp::TERM> result_set = map_of_result_sets.at(uid);
+        std::vector<nifpp::TERM> result_set = map_of_result_sets[uid-1];
         
         int arity;
         int hash_val;
@@ -82,14 +86,15 @@ public:
                hash_val = (10*hash_val) + ebin.data[i];
             }
             enif_release_binary(&ebin);
-            std::pair<int, int> index_addr = std::make_pair(uid, index);
+            std::pair<int, int> index_addr = std::make_pair(uid-1, index);
             std::vector<std::pair<int,int>> init_vector = {};
             init_vector.push_back(index_addr);
             auto emp_res = current_result_index.emplace (hash_val, init_vector);
             if(emp_res.second==false)
                 current_result_index.at(hash_val).push_back(index_addr);
             int current_size = current_result_index.at(hash_val).size();
-            reverse_result_index.at(current_size).push_back(hash_val);
+            current_size--;
+            reverse_result_index[current_size].push_back(hash_val);
             index = index + 1;
         }
     }
@@ -97,13 +102,16 @@ public:
     std::vector<std::vector<nifpp::TERM>> get_final_result_set(ErlNifEnv* env)
     {
         std::vector<std::vector<nifpp::TERM>> final_result = {};
+        final_result.reserve(total_count);
+        int size = reverse_result_index[total_count-1].size();
         int inner_index = 0;
+        int outer_index = 0;
         int arity; int comp_arity = 0;
         const ERL_NIF_TERM* tuple;
         ErlNifBinary ebin, bin_term;
 
         nifpp::TERM term;
-        for (auto it_outer = reverse_result_index.at(total_count).begin(); it_outer != reverse_result_index.at(total_count).end(); ++it_outer)
+        for (auto it_outer = reverse_result_index[total_count-1].begin(); it_outer != reverse_result_index[total_count-1].end(); ++it_outer)
         {
             std::vector<nifpp::TERM> appended_rows = {};
             inner_index = 0;
@@ -112,9 +120,12 @@ public:
                 comp_arity = 0;
                 std::vector<nifpp::TERM> array_of_binaries = {};
                 std::pair<int,int> curr_pair = (*it_inner);
-                ErlNifEnv* env_inner = env_map.at(curr_pair.first);
-                if(enif_get_tuple(env_inner, map_of_result_sets.at(curr_pair.first).at(curr_pair.second), &arity, &tuple)!=1)
+                int inner_most_index = 0;
+                int uid_local = curr_pair.first;
+                ErlNifEnv* env_inner = env_map[uid_local];
+                if(enif_get_tuple(env_inner, map_of_result_sets[uid_local].at(curr_pair.second), &arity, &tuple)!=1)
                     enif_make_badarg(env);
+                array_of_binaries.reserve(arity);
                
                 if (inner_index==0)
                 {
@@ -125,7 +136,8 @@ public:
                         memcpy(bin_term.data, ebin.data, ebin.size);
                         term = nifpp::make(env, bin_term);
                         array_of_binaries.push_back(term);
-                        comp_arity = comp_arity + 1;
+                        inner_most_index++;
+                        comp_arity++;
                         enif_release_binary(&bin_term);
                         enif_release_binary(&ebin);
                     }
@@ -141,16 +153,20 @@ public:
                         memcpy(bin_term.data, ebin.data, ebin.size);
                         term = nifpp::make(env, bin_term);
                         array_of_binaries.push_back(term);
-                        comp_arity = comp_arity + 1;
+                        inner_most_index++;
+                        comp_arity++;
                         enif_release_binary(&bin_term);
                         enif_release_binary(&ebin);
                     }
 
                 }
+
                 appended_rows.insert(appended_rows.end(),array_of_binaries.begin(),array_of_binaries.end());
                 inner_index = inner_index + 1;
             }
+
             final_result.push_back(appended_rows);
+            outer_index++;
         }
         return final_result;
     }
@@ -200,7 +216,6 @@ static ERL_NIF_TERM append_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TE
             result = nifpp::make(env, new_result);
         }
         return result;
-        // return result;
     }
     catch(...) {}
     return enif_make_badarg(env);
