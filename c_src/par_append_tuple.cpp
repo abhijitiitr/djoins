@@ -16,6 +16,7 @@ class ResultSet
     std::unordered_map<int,std::vector<std::pair<int,int>>> current_result_index;
     std::vector<std::vector<int>> reverse_result_index;
     std::vector<ErlNifEnv*> env_map;
+    std::vector<nifpp::TERM> columns;
     int result_count;
     int total_count;
 public:
@@ -26,6 +27,7 @@ public:
        map_of_result_sets.resize(init_count);
        env_map.resize(init_count);
        reverse_result_index.resize(init_count);
+       columns.resize(init_count);
     }
     bool is_last_result()
     {
@@ -43,7 +45,7 @@ public:
     {
         return map_of_result_sets;
     }
-    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<nifpp::TERM> result_set,int uid, ErlNifEnv* env_outer)
+    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<nifpp::TERM> result_set,int uid, ErlNifEnv* env_outer,std::vector<nifpp::TERM>* cols)
     {
         std::vector<std::vector<nifpp::TERM>> final_result_set = {};
         if(result_count < total_count)
@@ -51,6 +53,7 @@ public:
             map_of_result_sets[uid-1] = result_set;
             env_map[uid-1] = env_outer;
             restructure_current_result_index(env_outer, uid);
+            set_columns(cols,uid);
             result_count++ ;
             if (result_count==total_count)
             {
@@ -58,6 +61,19 @@ public:
             }
         }
         return final_result_set;
+    }
+    void set_columns(std::vector<nifpp::TERM>* colums,int uid)
+    {   
+        ErlNifEnv* env_inner = env_map[uid];
+        ErlNifBinary ebin, bin_term;
+        int arity;
+        const ERL_NIF_TERM* tuple;
+        for (std::vector<nifpp::TERM>::iterator i = (*colums).begin(); i != (*colums).end(); ++i)
+        {
+            if(enif_get_tuple(env_inner, (*i), &arity, &tuple)!=1)
+                enif_make_badarg(env);
+            
+        }
     }
     void print_current_result_set()
     {
