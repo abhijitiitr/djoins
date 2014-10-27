@@ -63,19 +63,6 @@ public:
         }
         return final_result_set;
     }
-    void set_columns(std::vector<nifpp::TERM>* colums,int uid)
-    {   
-        ErlNifEnv* env_inner = env_map[uid];
-        ErlNifBinary ebin, bin_term;
-        int arity;
-        const ERL_NIF_TERM* tuple;
-        for (std::vector<nifpp::TERM>::iterator i = (*colums).begin(); i != (*colums).end(); ++i)
-        {
-            if(enif_get_tuple(env_inner, (*i), &arity, &tuple)!=1)
-                enif_make_badarg(env);
-            
-        }
-    }
     void print_current_result_set()
     {
         for (auto it = current_result_index.begin(); it != current_result_index.end(); ++it)
