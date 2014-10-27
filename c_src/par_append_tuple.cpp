@@ -53,6 +53,7 @@ public:
             map_of_result_sets[uid-1] = result_set;
             env_map[uid-1] = env_outer;
             restructure_current_result_index(env_outer, uid);
+            set_columns(cols,uid);
             result_count++ ;
             columns[uid-1] = *cols;
             if (result_count==total_count)
@@ -61,6 +62,19 @@ public:
             }
         }
         return final_result_set;
+    }
+    void set_columns(std::vector<nifpp::TERM>* colums,int uid)
+    {   
+        ErlNifEnv* env_inner = env_map[uid];
+        ErlNifBinary ebin, bin_term;
+        int arity;
+        const ERL_NIF_TERM* tuple;
+        for (std::vector<nifpp::TERM>::iterator i = (*colums).begin(); i != (*colums).end(); ++i)
+        {
+            if(enif_get_tuple(env_inner, (*i), &arity, &tuple)!=1)
+                enif_make_badarg(env);
+            
+        }
     }
     void print_current_result_set()
     {
