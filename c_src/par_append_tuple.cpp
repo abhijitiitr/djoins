@@ -16,6 +16,7 @@ class ResultSet
     std::unordered_map<int,std::vector<std::pair<int,int>>> current_result_index;
     std::vector<std::vector<int>> reverse_result_index;
     std::vector<ErlNifEnv*> env_map;
+    std::vector<std::vector<nifpp::TERM>> columns;
     int result_count;
     int total_count;
 public:
@@ -26,6 +27,7 @@ public:
        map_of_result_sets.resize(init_count);
        env_map.resize(init_count);
        reverse_result_index.resize(init_count);
+       columns.resize(init_count);
     }
     bool is_last_result()
     {
@@ -43,7 +45,7 @@ public:
     {
         return map_of_result_sets;
     }
-    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<nifpp::TERM> result_set,int uid, ErlNifEnv* env_outer)
+    std::vector<std::vector<nifpp::TERM>> append_result_set(std::vector<nifpp::TERM> result_set, std::vector<nifpp::TERM>* cols,int uid, ErlNifEnv* env_outer)
     {
         std::vector<std::vector<nifpp::TERM>> final_result_set = {};
         if(result_count < total_count)
@@ -52,6 +54,7 @@ public:
             env_map[uid-1] = env_outer;
             restructure_current_result_index(env_outer, uid);
             result_count++ ;
+            columns[uid-1] = *cols;
             if (result_count==total_count)
             {
                 final_result_set = get_final_result_set(env_outer);
@@ -108,7 +111,7 @@ public:
         int outer_index = 0;
         int arity; int comp_arity = 0;
         const ERL_NIF_TERM* tuple;
-        ErlNifBinary ebin, bin_term;
+        ErlNifBinary ebin;
 
         nifpp::TERM term;
         for (auto it_outer = reverse_result_index[total_count-1].begin(); it_outer != reverse_result_index[total_count-1].end(); ++it_outer)
@@ -132,13 +135,11 @@ public:
                     while(comp_arity != arity && comp_arity < arity)
                     {
                         nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
-                        enif_alloc_binary(ebin.size, &bin_term);
-                        memcpy(bin_term.data, ebin.data, ebin.size);
-                        term = nifpp::make(env, bin_term);
+                        term = nifpp::make(env, ebin);
+                        term = nifpp::make(env, std::make_tuple(columns[uid_local].at(comp_arity),term)) ;
                         array_of_binaries.push_back(term);
                         inner_most_index++;
                         comp_arity++;
-                        enif_release_binary(&bin_term);
                         enif_release_binary(&ebin);
                     }
 
@@ -149,13 +150,11 @@ public:
                     while(comp_arity != arity && comp_arity < arity)
                     {
                         nifpp::get_throws(env_inner, tuple[comp_arity], ebin);
-                        enif_alloc_binary(ebin.size, &bin_term);
-                        memcpy(bin_term.data, ebin.data, ebin.size);
-                        term = nifpp::make(env, bin_term);
+                        term = nifpp::make(env, ebin);
+                        term = nifpp::make(env, std::make_tuple(columns[uid_local].at(comp_arity),term)) ;
                         array_of_binaries.push_back(term);
                         inner_most_index++;
                         comp_arity++;
-                        enif_release_binary(&bin_term);
                         enif_release_binary(&ebin);
                     }
 
@@ -201,11 +200,13 @@ static ERL_NIF_TERM append_result_set(ErlNifEnv* env, int argc, const ERL_NIF_TE
         nifpp::resource_ptr<ResultSet> ptr;
         std::vector<std::vector<nifpp::TERM>> result_set;
         std::vector<nifpp::TERM> input_result_set;
+        std::vector<nifpp::TERM> cols;
         int uid;
         nifpp::get(env, argv[0], ptr);
         nifpp::get(env, argv[1], input_result_set);
-        nifpp::get(env, argv[2], uid);
-        std::vector<std::vector<nifpp::TERM>> new_result = (*ptr).append_result_set(input_result_set, uid, env);
+        nifpp::get(env, argv[2], cols);
+        nifpp::get(env, argv[3], uid);
+        std::vector<std::vector<nifpp::TERM>> new_result = (*ptr).append_result_set(input_result_set, &cols, uid, env);
         if((*ptr).is_last_result())
         {
             auto tup = std::make_tuple(nifpp::str_atom("result"), new_result);
@@ -259,7 +260,7 @@ extern "C" {
 static ErlNifFunc nif_funcs[] = {
                                     {"initialize_result_set", 1, initialize_result_set}, 
                                     {"return_result_set", 1, return_result_set},
-                                    {"append_result_set", 3, append_result_set},
+                                    {"append_result_set", 4, append_result_set},
                                 };
 
 ERL_NIF_INIT(par_append_tuple, nif_funcs, load, NULL, NULL, NULL)
