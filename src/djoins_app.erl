@@ -1,3 +1,11 @@
+%%%-------------------------------------------------------------------
+%%% @author Abhijit Pratap Singh <singh.abhijitpratap@gmail.com>
+%%% @copyright (C) 2014, Abhijit Pratap Singh
+%%% @doc
+%%%
+%%% @end
+%%% Created : 31 October 2014 by Abhijit Pratap Singh <singh.abhijitpratap@gmail.com>
+%%%-------------------------------------------------------------------
 -module(djoins_app).
 
 -behaviour(application).

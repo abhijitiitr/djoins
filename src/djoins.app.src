@@ -1,12 +1,18 @@
+%% -*- erlang -*-
 {application, djoins,
- [
-  {description, ""},
-  {vsn, "1"},
-  {registered, []},
+ [{description, ""},
+  {vsn, "0.1.0"},
+  {registered, [postgres_pool_sup]},
+  {mod, {djoins_app, []}},
+  {start_phases, []},
   {applications, [
-                  kernel,
-                  stdlib
+                 kernel
+                 ,stdlib
+                 ,sasl
+                 ,lager
+                 ,crypto
+                 ,epgsql
+                 ,episcina                 
                  ]},
-  {mod, { djoins_app, []}},
   {env, []}
  ]}.
