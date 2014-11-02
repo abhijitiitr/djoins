@@ -30,7 +30,6 @@ spawn_concurrent_append({Pid, List}) ->
 			lists:foreach(fun(Int_Pid) ->
 				Int_Pid ! {ok, finished}
               end, List)
-
 	end.
 
 
