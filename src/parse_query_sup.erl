@@ -20,13 +20,20 @@ start_link() ->
 %%%===================================================================
 
 init([]) ->
-    RestartStrategy = one_for_one,
-    MaxRestarts = 1000,
-    MaxSecondsBetweenRestarts = 3600,
+    RestartStrategy = simple_one_for_one,
+    MaxRestarts = 1,
+    MaxSecondsBetweenRestarts = 9600,
 
     SupFlags = {RestartStrategy, MaxRestarts, MaxSecondsBetweenRestarts},
 
-    {ok, {SupFlags, []}}.
+    Restart = temporary,
+    Shutdown = brutal_kill,
+    Type = worker,
+
+    AChild = {parse_query, {parse_query, start_link, []},
+          Restart, Shutdown, Type, [parse_query]},
+
+    {ok, {SupFlags, [AChild]}}.
 
 %%%===================================================================
 %%% Internal functions
