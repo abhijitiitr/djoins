@@ -46,7 +46,7 @@ query(Query) ->
         % {ok, C} = get_connection(primary),
     case get_connection(primary) of
         {ok, C} ->
-            try 
+            try
                 {ok, Columns, Rows} = pgsql:squery(C, Query)
             after
                 return_connection(primary, C)

@@ -13,7 +13,7 @@ spawn_concurrent_append({Pid, List}) ->
 			Ref = par_append_tuple:initialize_result_set(3),
 			R1 = [{<<"23">>,<<"twentythree">>,<<"dcjcjd">>},{<<"12">>,<<"twelve">>,<<"dcjcjd">>},{<<"14">>,<<"fourteen">>,<<"dcjcjd">>}],
  			R2 = [{<<"45">>,<<"fortyfive">>,<<"dcjcjd">>,<<"dchdfhcd">>},{<<"12">>,<<"twelvesecond">>,<<"dcdbjbvjcjd">>,<<"dchdfhcd">>},{<<"23">>,<<"twentythreesecond">>,<<"dcjcjddbcjbd">>,<<"dchdfhcd">>}],
- 			R3 = [{<<"45">>,<<"fortyfivetwo">>,<<"dcjcjdtwo">>,<<"dchdfhcdtwo">>,<<"init2">>},{<<"12">>,<<"twelvethird">>,<<"zbcsbcds">>,<<"yuwyewjeh">>,<<"cbdjbcdjd">>},{<<"14">>,<<"fourteen">>,<<"notfourteen">>,<<"yesfourteen">>,<<"trollfourteen">>}],
+ 			R3 = [{<<"12">>,<<"twelvethird">>,<<"zbcsbcds">>,<<"yuwyewjeh">>,<<"cbdjbcdjd">>},{<<"14">>,<<"fourteen">>,<<"notfourteen">>,<<"yesfourteen">>,<<"trollfourteen">>}],
 			Pid1 = spawn(result_collector, spawn_concurrent_append, [Sql]),
 			Pid2 = spawn(result_collector, spawn_concurrent_append, [Sql]),
 			Pid3 = spawn(result_collector, spawn_concurrent_append, [Sql]),
