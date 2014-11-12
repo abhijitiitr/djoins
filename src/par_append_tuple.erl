@@ -1,3 +1,4 @@
+% For testing purposes please compile the required modules and run the following instructions
 % c(par_append_tuple).
 % Ref=par_append_tuple:initialize_result_set(2).
 % R1=[{<<"23">>,<<"twentythree">>,<<"dcjcjd">>},{<<"12">>,<<"twelve">>,<<"dcjcjd">>},{<<"14">>,<<"fourteen">>,<<"dcjcjd">>}].
